@@ -1,4 +1,4 @@
-name: 语雀笔记自动同步（最终版）
+name: 语雀笔记自动同步（最终可用版）
 on:
   workflow_dispatch:
   schedule:
@@ -7,6 +7,8 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # 给Actions仓库写入权限
     steps:
       - uses: actions/checkout@v4
 
@@ -15,7 +17,7 @@ jobs:
         with:
           node-version: 20
 
-      - name: 直接用 API 同步
+      - name: 语雀同步脚本
         env:
           YUQUE_TOKEN: ${{ secrets.YUQUE_TOKEN }}
           NAMESPACE: "whhhhhhhhh-utetq"
@@ -49,7 +51,6 @@ jobs:
 
           (async () => {
             try {
-              // 1. 获取所有知识库
               const repos = await get(`https://www.yuque.com/api/v2/users/${ns}/repos`);
               if (repos.status !== 200) throw new Error('获取知识库失败');
 
@@ -57,12 +58,10 @@ jobs:
                 const repoPath = path.join(outDir, repo.name);
                 if (!fs.existsSync(repoPath)) fs.mkdirSync(repoPath, { recursive: true });
 
-                // 2. 获取文档列表
                 const docs = await get(`https://www.yuque.com/api/v2/repos/${repo.id}/docs`);
                 if (docs.status !== 200) continue;
 
                 for (const doc of docs.data) {
-                  // 3. 获取文档详情
                   const detail = await get(`https://www.yuque.com/api/v2/repos/${repo.id}/docs/${doc.id}`);
                   if (detail.status !== 200) continue;
 
@@ -84,7 +83,7 @@ jobs:
 
           node sync.js
 
-      - name: 提交到仓库
+      - name: 提交并推送
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "actions@github.com"
