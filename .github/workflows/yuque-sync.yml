@@ -1,92 +1,12 @@
-name: 语雀笔记自动同步（最终可用版）
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 * * * *'
-
+name: 语雀 API 测试
+on: workflow_dispatch
 jobs:
-  sync:
+  test:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # 给Actions仓库写入权限
     steps:
-      - uses: actions/checkout@v4
-
-      - name: 安装 Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: 语雀同步脚本
+      - name: 测试语雀 API
         env:
           YUQUE_TOKEN: ${{ secrets.YUQUE_TOKEN }}
           NAMESPACE: "whhhhhhhhh-utetq"
         run: |
-          cat > sync.js << 'EOF'
-          const https = require('https');
-          const fs = require('fs');
-          const path = require('path');
-
-          const token = process.env.YUQUE_TOKEN;
-          const ns = process.env.NAMESPACE;
-          const outDir = './docs';
-
-          if (!token || !ns) {
-            console.error('❌ 缺少 Token 或 Namespace');
-            process.exit(1);
-          }
-
-          if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-
-          const get = (url) => new Promise((resolve, reject) => {
-            const req = https.get(url, {
-              headers: { 'X-Auth-Token': token }
-            }, (res) => {
-              let data = '';
-              res.on('data', c => data += c);
-              res.on('end', () => resolve(JSON.parse(data)));
-            });
-            req.on('error', reject);
-          });
-
-          (async () => {
-            try {
-              const repos = await get(`https://www.yuque.com/api/v2/users/${ns}/repos`);
-              if (repos.status !== 200) throw new Error('获取知识库失败');
-
-              for (const repo of repos.data) {
-                const repoPath = path.join(outDir, repo.name);
-                if (!fs.existsSync(repoPath)) fs.mkdirSync(repoPath, { recursive: true });
-
-                const docs = await get(`https://www.yuque.com/api/v2/repos/${repo.id}/docs`);
-                if (docs.status !== 200) continue;
-
-                for (const doc of docs.data) {
-                  const detail = await get(`https://www.yuque.com/api/v2/repos/${repo.id}/docs/${doc.id}`);
-                  if (detail.status !== 200) continue;
-
-                  const fileName = `${doc.title.replace(/[\\/:*?"<>|]/g, '_')}.md`;
-                  const filePath = path.join(repoPath, fileName);
-                  const content = `# ${doc.title}\n\n${detail.data.body || ''}`;
-
-                  fs.writeFileSync(filePath, content, 'utf8');
-                  console.log(`✅ 已保存: ${repo.name}/${fileName}`);
-                }
-              }
-              console.log('🎉 同步完成');
-            } catch (err) {
-              console.error('❌ 错误:', err);
-              process.exit(1);
-            }
-          })();
-          EOF
-
-          node sync.js
-
-      - name: 提交并推送
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "actions@github.com"
-          git add .
-          git commit -m "auto sync yuque notes" || echo "Nothing to commit"
-          git push
+          curl -v -H "X-Auth-Token: $YUQUE_TOKEN" "https://www.yuque.com/api/v2/users/$NAMESPACE/repos"
