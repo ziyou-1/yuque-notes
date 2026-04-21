@@ -22,7 +22,7 @@ jobs:
       - name: 执行语雀同步
         env:
           YUQUE_TOKEN: ${{ secrets.YUQUE_TOKEN }}
-          YUQUE_NAMESPACE: 你的语雀个人空间ID
+          YUQUE_NAMESPACE: dashboard
         run: |
           yuque-sync pull .
           git config --global user.name "github-actions[bot]"
