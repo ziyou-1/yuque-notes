@@ -17,16 +17,32 @@ jobs:
           node-version: 20
 
       - name: 安装同步工具
-        run: npm install -g @yuque/sync
+        run: npm install -g @elog/cli
+
+      - name: 创建配置文件
+        run: |
+          cat > elog.config.js << EOF
+          module.exports = {
+            platform: 'yuque',
+            yuque: {
+              token: process.env.YUQUE_TOKEN,
+              namespace: 'whhhhhhhhh-utetq',
+              onlyPublished: true
+            },
+            output: {
+              path: './docs',
+              format: 'md'
+            }
+          }
+          EOF
 
       - name: 执行语雀同步
         env:
           YUQUE_TOKEN: ${{ secrets.YUQUE_TOKEN }}
-          YUQUE_NAMESPACE: dashboard
         run: |
-          yuque-sync pull .
+          elog sync
           git config --global user.name "github-actions[bot]"
           git config --global user.email "actions@github.com"
           git add .
-          git commit -m "auto sync yuque notes"
+          git commit -m "auto sync yuque notes" || echo "Nothing to commit"
           git push
