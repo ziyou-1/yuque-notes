@@ -1,8 +1,8 @@
 name: 语雀笔记自动同步
 on:
-  repository_dispatch:
-    types: [yuque_sync]
   workflow_dispatch:
+  schedule:
+    - cron: '0 * * * *'
 
 jobs:
   sync:
@@ -16,27 +16,27 @@ jobs:
         with:
           node-version: 20
 
-      - name: 安装同步工具
+      - name: 安装同步工具 elog
         run: npm install -g @elog/cli
 
-      - name: 创建配置文件
+      - name: 写入 elog 配置文件
         run: |
-          cat > elog.config.js << EOF
+          cat > elog.config.js << 'EOF'
           module.exports = {
-            platform: 'yuque',
+            platform: "yuque",
             yuque: {
               token: process.env.YUQUE_TOKEN,
-              namespace: 'whhhhhhhhh-utetq',
+              namespace: "whhhhhhhhh-utetq",
               onlyPublished: true
             },
             output: {
-              path: './docs',
-              format: 'md'
+              path: "./docs",
+              format: "md"
             }
-          }
+          };
           EOF
 
-      - name: 执行语雀同步
+      - name: 执行同步
         env:
           YUQUE_TOKEN: ${{ secrets.YUQUE_TOKEN }}
         run: |
