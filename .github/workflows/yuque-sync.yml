@@ -2,7 +2,7 @@ name: 语雀笔记自动同步
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0 * * * *' # 每小时自动同步一次
 
 jobs:
   sync:
@@ -16,31 +16,108 @@ jobs:
         with:
           node-version: 20
 
-      - name: 安装同步工具 elog
-        run: npm install -g @elog/cli
-
-      - name: 写入 elog 配置文件
+      - name: 编写同步脚本
         run: |
-          cat > elog.config.js << 'EOF'
-          module.exports = {
-            platform: "yuque",
-            yuque: {
-              token: process.env.YUQUE_TOKEN,
-              namespace: "whhhhhhhhh-utetq",
-              onlyPublished: true
-            },
-            output: {
-              path: "./docs",
-              format: "md"
+          cat > sync.js << 'EOF'
+          const fs = require('fs');
+          const path = require('path');
+          const https = require('https');
+
+          const YUQUE_TOKEN = process.env.YUQUE_TOKEN;
+          const NAMESPACE = 'whhhhhhhhh-utetq'; // 你的语雀ID
+          const OUTPUT_DIR = './docs';
+
+          if (!YUQUE_TOKEN) {
+            console.error('❌ YUQUE_TOKEN 未设置');
+            process.exit(1);
+          }
+
+          // 创建目录
+          if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR);
+
+          // 1. 获取知识库列表
+          const getRepos = () => new Promise((resolve, reject) => {
+            const options = {
+              hostname: 'www.yuque.com',
+              path: `/api/v2/users/${NAMESPACE}/repos`,
+              method: 'GET',
+              headers: { 'X-Auth-Token': YUQUE_TOKEN }
+            };
+            https.get(options, (res) => {
+              let data = '';
+              res.on('data', chunk => data += chunk);
+              res.on('end', () => resolve(JSON.parse(data)));
+            }).on('error', reject);
+          });
+
+          // 2. 获取文档列表
+          const getDocs = (repoId) => new Promise((resolve, reject) => {
+            const options = {
+              hostname: 'www.yuque.com',
+              path: `/api/v2/repos/${repoId}/docs`,
+              method: 'GET',
+              headers: { 'X-Auth-Token': YUQUE_TOKEN }
+            };
+            https.get(options, (res) => {
+              let data = '';
+              res.on('data', chunk => data += chunk);
+              res.on('end', () => resolve(JSON.parse(data)));
+            }).on('error', reject);
+          });
+
+          // 3. 获取文档详情
+          const getDocDetail = (repoId, docId) => new Promise((resolve, reject) => {
+            const options = {
+              hostname: 'www.yuque.com',
+              path: `/api/v2/repos/${repoId}/docs/${docId}`,
+              method: 'GET',
+              headers: { 'X-Auth-Token': YUQUE_TOKEN }
+            };
+            https.get(options, (res) => {
+              let data = '';
+              res.on('data', chunk => data += chunk);
+              res.on('end', () => resolve(JSON.parse(data)));
+            }).on('error', reject);
+          });
+
+          // 主流程
+          (async () => {
+            try {
+              const reposRes = await getRepos();
+              if (reposRes.status !== 200) throw new Error('获取知识库失败');
+
+              for (const repo of reposRes.data) {
+                const repoDir = path.join(OUTPUT_DIR, repo.name);
+                if (!fs.existsSync(repoDir)) fs.mkdirSync(repoDir);
+
+                const docsRes = await getDocs(repo.id);
+                if (docsRes.status !== 200) continue;
+
+                for (const doc of docsRes.data) {
+                  const detailRes = await getDocDetail(repo.id, doc.id);
+                  if (detailRes.status !== 200) continue;
+
+                  const fileName = `${doc.title.replace(/[\\/:*?"<>|]/g, '_')}.md`;
+                  const filePath = path.join(repoDir, fileName);
+                  const content = `# ${doc.title}\n\n${detailRes.data.body || ''}`;
+
+                  fs.writeFileSync(filePath, content, 'utf8');
+                  console.log(`✅ 已保存: ${repo.name}/${fileName}`);
+                }
+              }
+              console.log('🎉 同步完成');
+            } catch (err) {
+              console.error('❌ 同步失败:', err);
+              process.exit(1);
             }
-          };
+          })();
           EOF
 
-      - name: 执行同步
+      - name: 执行同步脚本
         env:
           YUQUE_TOKEN: ${{ secrets.YUQUE_TOKEN }}
         run: |
-          elog sync
+          node sync.js
           git config --global user.name "github-actions[bot]"
           git config --global user.email "actions@github.com"
           git add .
